@@ -2800,7 +2800,7 @@ function handleSaveRegistration() {
   const email = registerEmailInput.value.trim();
   const team = registerTeamSelect.value;
   const functionTitle = registerFunctionInput.value.trim();
-  const role = registerRoleSelect.value;
+  const role = registerRoleSelect ? registerRoleSelect.value : "";
 
   if (!name || !email) {
     showSnackbar("Vul je naam en e-mail in", "error");
@@ -3993,4 +3993,36 @@ function init() {
 
 // Start de applicatie
 init();
+
+// Function to find employee by email
+function findEmployeeByEmail(email) {
+  if (!email) return null;
+  
+  // Case-insensitive search for employee with matching email
+  return state.employees.find(
+    emp => emp.email && emp.email.toLowerCase() === email.toLowerCase()
+  );
+}
+
+// Function to fetch dagen-indicators from SharePoint
+function fetchDagenIndicators() {
+  const fields = SP_CONFIG.lists.dagenIndicators.fields;
+  return fetch(
+    `${SP_CONFIG.apiUrl}/lists(guid'${SP_CONFIG.lists.dagenIndicators.guid}')/items?$select=ID,${fields.titel},${fields.kleur},${fields.patroon}`,
+    {
+      headers: {
+        Accept: "application/json;odata=verbose",
+      },
+    }
+  )
+    .then((response) => response.json())
+    .then((data) => {
+      return data.d.results.map((item) => ({
+        id: item.ID,
+        title: item[fields.titel],
+        color: item[fields.kleur] || "#cccccc",
+        pattern: item[fields.patroon] || "Effen"
+      }));
+    });
+}
 

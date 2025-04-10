@@ -581,3 +581,163 @@ class DagenIndicators {
 document.addEventListener('DOMContentLoaded', () => {
   window.dagenIndicators = new DagenIndicators();
 });
+
+/**
+ * Dagen-Indicators Functionality
+ * 
+ * This file handles the loading and rendering of dynamic day indicators
+ * which are configurable patterns and colors for different day types.
+ */
+
+// Store loaded indicators in state
+let dagenIndicators = [];
+
+// Load dagen-indicators from SharePoint on startup
+function loadDagenIndicators() {
+  return fetchDagenIndicators()
+    .then(indicators => {
+      dagenIndicators = indicators;
+      console.log('Loaded dagen-indicators:', dagenIndicators);
+      return indicators;
+    })
+    .catch(error => {
+      console.error('Error loading dagen-indicators:', error);
+      return [];
+    });
+}
+
+// Get pattern CSS based on pattern type
+function getPatternCSS(pattern, color) {
+  switch (pattern) {
+    case 'Effen':
+      return `background-color: ${color};`;
+    
+    case 'Diagonale lijn (rechts)':
+      return `
+        background-color: ${color};
+        background-image: linear-gradient(45deg, rgba(255,255,255,.5) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.5) 50%, rgba(255,255,255,.5) 75%, transparent 75%, transparent);
+        background-size: 10px 10px;
+      `;
+    
+    case 'Diagonale lijn (links)':
+      return `
+        background-color: ${color};
+        background-image: linear-gradient(-45deg, rgba(255,255,255,.5) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.5) 50%, rgba(255,255,255,.5) 75%, transparent 75%, transparent);
+        background-size: 10px 10px;
+      `;
+    
+    case 'Kruis':
+      return `
+        background-color: ${color};
+        background-image: linear-gradient(to right, rgba(255,255,255,.5) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(255,255,255,.5) 1px, transparent 1px);
+        background-size: 8px 8px;
+      `;
+    
+    case 'Plus':
+      return `
+        background-color: ${color};
+        background-image: 
+          linear-gradient(to right, transparent 45%, rgba(255,255,255,.5) 45%, rgba(255,255,255,.5) 55%, transparent 55%),
+          linear-gradient(to bottom, transparent 45%, rgba(255,255,255,.5) 45%, rgba(255,255,255,.5) 55%, transparent 55%);
+        background-size: 10px 10px;
+      `;
+    
+    case 'Louis Vuitton':
+      return `
+        background-color: ${color};
+        background-image: radial-gradient(rgba(255,255,255,.5) 15%, transparent 16%),
+                          radial-gradient(rgba(255,255,255,.5) 15%, transparent 16%);
+        background-size: 12px 12px;
+        background-position: 0 0, 6px 6px;
+      `;
+    
+    default:
+      return `background-color: ${color};`;
+  }
+}
+
+// Find indicator for a specific day type (VVD, VVM, VVO)
+function getIndicatorForType(dayType) {
+  if (!dayType || !dagenIndicators.length) {
+    // Fallback to default config if no indicators loaded yet
+    return {
+      title: SP_CONFIG.dayTypeIndicators[dayType]?.name || dayType,
+      color: SP_CONFIG.dayTypeIndicators[dayType]?.color || '#cccccc',
+      pattern: 'Effen'
+    };
+  }
+  
+  // Try to find matching indicator by title
+  const indicator = dagenIndicators.find(ind => ind.title === dayType);
+  
+  // Return indicator if found, or fallback to default
+  return indicator || {
+    title: SP_CONFIG.dayTypeIndicators[dayType]?.name || dayType,
+    color: SP_CONFIG.dayTypeIndicators[dayType]?.color || '#cccccc',
+    pattern: 'Effen'
+  };
+}
+
+// Update the legend with current indicators
+function updateDagenIndicatorsLegend() {
+  const legendSection = document.querySelector('#legendDagenIndicator .legend-section-content');
+  if (!legendSection) return;
+  
+  // Clear current items
+  legendSection.innerHTML = '';
+  
+  // Get all unique day types
+  const dayTypes = ['VVD', 'VVM', 'VVO']; // Default types always shown
+  
+  // Add all indicators to legend
+  dayTypes.forEach(dayType => {
+    const indicator = getIndicatorForType(dayType);
+    
+    const legendItem = document.createElement('div');
+    legendItem.className = 'legend-item';
+    
+    const colorDiv = document.createElement('div');
+    colorDiv.className = 'legend-color';
+    colorDiv.setAttribute('style', getPatternCSS(indicator.pattern, indicator.color));
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = indicator.title;
+    
+    legendItem.appendChild(colorDiv);
+    legendItem.appendChild(titleSpan);
+    legendSection.appendChild(legendItem);
+  });
+}
+
+// Apply indicators to calendar days
+function applyDagenIndicatorsToCalendar() {
+  // Find all cells in the roster that need indicators
+  const cells = document.querySelectorAll('[data-daytype]');
+  
+  cells.forEach(cell => {
+    const dayType = cell.dataset.daytype;
+    if (!dayType) return;
+    
+    const indicator = getIndicatorForType(dayType);
+    
+    // Apply pattern and color CSS
+    cell.setAttribute('style', getPatternCSS(indicator.pattern, indicator.color));
+  });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Initializing dagen-indicators...');
+  loadDagenIndicators()
+    .then(() => {
+      updateDagenIndicatorsLegend();
+    });
+});
+
+// Export function for use in v.js
+window.loadDagenIndicators = loadDagenIndicators;
+window.getIndicatorForType = getIndicatorForType;
+window.getPatternCSS = getPatternCSS;
+window.updateDagenIndicatorsLegend = updateDagenIndicatorsLegend;
+window.applyDagenIndicatorsToCalendar = applyDagenIndicatorsToCalendar;

@@ -65,45 +65,47 @@ async function fetchUserInfo(email) {
     }
 
     try {
-        const response = await fetch(`${SP_CONFIG.apiUrl}/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='i:0%23.f|membership|${email}'&$select=DisplayName,Email,Title,UserProfileProperties`, {
-            headers: {
-                Accept: "application/json;odata=verbose"
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Error fetching user info: ${response.statusText}`);
+        // Use findEmployeeByEmail to get employee info instead of using People Manager
+        const employee = findEmployeeByEmail(email);
+        if (employee) {
+            console.log(`Found employee in local state for ${email}:`, employee);
+            
+            const userInfo = {
+                name: employee.name || email.split('@')[0],
+                email: email,
+                phone: 'Geen telefoonnummer',
+                aboutMe: 'Informatie uit lokale medewerkers lijst',
+                jobTitle: employee.function || 'Geen functietitel',
+                department: employee.team || 'Geen afdeling',
+                office: '',
+                manager: '',
+                skills: '',
+                pictureUrl: getProfilePictureUrl(email)
+            };
+            
+            // Cache the result
+            USER_INFO_CONFIG.userCache[email] = userInfo;
+            USER_INFO_CONFIG.lastUpdate[email] = Date.now();
+            return userInfo;
         }
-
-        const data = await response.json();
-        const userProperties = {};
         
-        if (data.d && data.d.UserProfileProperties && data.d.UserProfileProperties.results) {
-            data.d.UserProfileProperties.results.forEach(prop => {
-                userProperties[prop.Key] = prop.Value;
-            });
-        }
-        
-        console.log('User profile properties:', userProperties);
-        
-        // Create a comprehensive user info object
-        const userInfo = {
-            name: data.d.DisplayName || 'N/A',
+        console.log("Employee not found in local state, using fallback info");
+        // Fallback if employee not found in local state
+        const basicUserInfo = {
             email: email,
-            phone: userProperties.WorkPhone || userProperties.CellPhone || userProperties.HomePhone || 'Geen telefoonnummer',
-            aboutMe: userProperties.AboutMe || userProperties.Notes || 'Geen persoonlijke informatie beschikbaar',
-            jobTitle: userProperties.Title || data.d.Title || 'Geen functietitel',
-            department: userProperties.Department || 'Geen afdeling',
-            office: userProperties.Office || userProperties.Location || 'Geen locatie',
-            manager: userProperties.Manager || 'Geen manager',
-            skills: userProperties.Skills || 'Geen vaardigheden vermeld',
-            pictureUrl: getProfilePictureUrl(email)
+            name: email.split('@')[0], // Use first part of email as name
+            phone: 'Geen telefoonnummer',
+            aboutMe: 'Geen toegang tot profiel informatie',
+            jobTitle: '',
+            department: '',
+            pictureUrl: null,
+            _errorFetching: true // Flag to indicate this was a failed request
         };
-
-        // Cache the result
-        USER_INFO_CONFIG.userCache[email] = userInfo;
+        
+        // Cache the result even when it fails to prevent repeated API calls
+        USER_INFO_CONFIG.userCache[email] = basicUserInfo;
         USER_INFO_CONFIG.lastUpdate[email] = Date.now();
-        return userInfo;
+        return basicUserInfo;
     } catch (error) {
         console.error('Error fetching user info:', error);
         
@@ -502,8 +504,349 @@ function populateDefaultTeamSelect() {
         });
 }
 
+// Calculate total hours between start and end time
+function calculateTotalHours(startTime, endTime) {
+    if (!startTime || !endTime) {
+        return 0;
+    }
+    
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+    
+    const startTimeMinutes = startHour * 60 + startMinute;
+    const endTimeMinutes = endHour * 60 + endMinute;
+    
+    // Calculate difference in minutes and convert to hours (rounded to 1 decimal)
+    const diffMinutes = endTimeMinutes - startTimeMinutes;
+    return Math.max(0, Math.round(diffMinutes / 6) / 10); // Round to 1 decimal
+}
+
+// Calculate day type (VVD, VVM, VVO, or VVF) based on hours and time
+function calculateDayType(startTime, endTime, totalHours) {
+    if (!startTime || !endTime || totalHours === 0) {
+        return "VVD"; // Free day
+    }
+    
+    if (totalHours < 6) {
+        // Convert start time to hours for comparison
+        const startHour = parseInt(startTime.split(':')[0]);
+        
+        if (startHour < 12) {
+            return "VVM"; // Morning work (before noon)
+        } else {
+            return "VVO"; // Afternoon work (after noon)
+        }
+    }
+    
+    return "VVF"; // Full day (6+ hours)
+}
+
+// Get existing UrenPerWeek entry for employee
+async function getUrenPerWeekForEmployee(employeeId) {
+    try {
+        console.log(`Fetching UrenPerWeek entry for employee ID: ${employeeId}`);
+        
+        // Make sure employeeId is a string since it's stored as text in SharePoint
+        const employeeIdStr = employeeId.toString();
+        
+        // Use the correct API URL structure - ensure we use proper filtering for text values
+        const url = `${SP_CONFIG.apiUrl}/lists(guid'${SP_CONFIG.lists.urenPerWeek.guid}')/items?$filter=${SP_CONFIG.lists.urenPerWeek.fields.medewerkerId} eq '${employeeIdStr}'`;
+        console.log("Request URL:", url);
+        
+        const response = await fetch(url, {
+            headers: {
+                "Accept": "application/json;odata=verbose"
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error fetching UrenPerWeek: ${response.status}`, errorText);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        // Properly handle the case where data structure might be unexpected
+        if (!data || !data.d || !Array.isArray(data.d.results)) {
+            console.warn("Unexpected response format from UrenPerWeek query:", data);
+            return null;
+        }
+        
+        if (data.d.results.length === 0) {
+            console.log("No UrenPerWeek entry found for employee ID:", employeeIdStr);
+            return null;
+        }
+        
+        console.log("Found UrenPerWeek entry:", data.d.results[0]);
+        return data.d.results[0];
+    } catch (error) {
+        console.error("Error getting UrenPerWeek for employee:", error);
+        return null;
+    }
+}
+
+// Create new UrenPerWeek item
+async function createUrenPerWeekItem(employeeId, workHoursData) {
+    try {
+        // First get a fresh form digest token
+        const formDigest = await getFormDigest();
+        
+        const metadata = { 
+            "__metadata": { 
+                "type": `SP.Data.UrenPerWeekListItem` 
+            } 
+        };
+        
+        // Calculate all day totals and types
+        const monday = workHoursData.workDays.monday;
+        const tuesday = workHoursData.workDays.tuesday;
+        const wednesday = workHoursData.workDays.wednesday;
+        const thursday = workHoursData.workDays.thursday;
+        const friday = workHoursData.workDays.friday;
+        
+        // Calculate total hours for each day
+        const mondayTotal = monday.isFreeDay ? 0 : calculateTotalHours(monday.startTime, monday.endTime);
+        const tuesdayTotal = tuesday.isFreeDay ? 0 : calculateTotalHours(tuesday.startTime, tuesday.endTime);
+        const wednesdayTotal = wednesday.isFreeDay ? 0 : calculateTotalHours(wednesday.startTime, wednesday.endTime);
+        const thursdayTotal = thursday.isFreeDay ? 0 : calculateTotalHours(thursday.startTime, thursday.endTime);
+        const fridayTotal = friday.isFreeDay ? 0 : calculateTotalHours(friday.startTime, friday.endTime);
+        
+        // Convert all numerical values to strings since all fields are single line text fields
+        const itemData = {
+            ...metadata,
+            [SP_CONFIG.lists.urenPerWeek.fields.medewerkerId]: employeeId.toString(),
+            
+            // Monday data
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagStart]: monday.isFreeDay ? "" : monday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagEind]: monday.isFreeDay ? "" : monday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagTotaal]: mondayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagSoort]: calculateDayType(monday.startTime, monday.endTime, mondayTotal),
+            
+            // Tuesday data
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagStart]: tuesday.isFreeDay ? "" : tuesday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagEind]: tuesday.isFreeDay ? "" : tuesday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagTotaal]: tuesdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagSoort]: calculateDayType(tuesday.startTime, tuesday.endTime, tuesdayTotal),
+            
+            // Wednesday data
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagStart]: wednesday.isFreeDay ? "" : wednesday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagEind]: wednesday.isFreeDay ? "" : wednesday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagTotaal]: wednesdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagSoort]: calculateDayType(wednesday.startTime, wednesday.endTime, wednesdayTotal),
+            
+            // Thursday data
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagStart]: thursday.isFreeDay ? "" : thursday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagEind]: thursday.isFreeDay ? "" : thursday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagTotaal]: thursdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagSoort]: calculateDayType(thursday.startTime, thursday.endTime, thursdayTotal),
+            
+            // Friday data
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagStart]: friday.isFreeDay ? "" : friday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagEind]: friday.isFreeDay ? "" : friday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagTotaal]: fridayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagSoort]: calculateDayType(friday.startTime, friday.endTime, fridayTotal)
+        };
+
+        console.log("Creating UrenPerWeek item:", itemData);
+        
+        // Fixed URL - removed the incorrect "web/" segment
+        const response = await fetch(
+            `${SP_CONFIG.apiUrl}/lists(guid'${SP_CONFIG.lists.urenPerWeek.guid}')/items`,
+            {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json;odata=verbose",
+                    "Content-Type": "application/json;odata=verbose",
+                    "X-RequestDigest": formDigest
+                },
+                body: JSON.stringify(itemData)
+            }
+        );
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Error creating UrenPerWeek item:", response.status, errorText);
+            throw new Error(`Error creating UrenPerWeek item: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Successfully created UrenPerWeek item:", data);
+        return data;
+    } catch (error) {
+        console.error("Failed to create UrenPerWeek item:", error);
+        throw error;
+    }
+}
+
+// Update existing UrenPerWeek item
+async function updateUrenPerWeekItem(itemId, employeeId, workHoursData) {
+    try {
+        // First get a fresh form digest token
+        const formDigest = await getFormDigest();
+        
+        console.log(`Updating UrenPerWeek item ID: ${itemId} for employee ID: ${employeeId}`);
+        
+        // Calculate for each day
+        const monday = workHoursData.workDays.monday;
+        const tuesday = workHoursData.workDays.tuesday;
+        const wednesday = workHoursData.workDays.wednesday;
+        const thursday = workHoursData.workDays.thursday;
+        const friday = workHoursData.workDays.friday;
+        
+        // Calculate total hours for each day
+        const mondayTotal = monday.isFreeDay ? 0 : calculateTotalHours(monday.startTime, monday.endTime);
+        const tuesdayTotal = tuesday.isFreeDay ? 0 : calculateTotalHours(tuesday.startTime, tuesday.endTime);
+        const wednesdayTotal = wednesday.isFreeDay ? 0 : calculateTotalHours(wednesday.startTime, wednesday.endTime);
+        const thursdayTotal = thursday.isFreeDay ? 0 : calculateTotalHours(thursday.startTime, thursday.endTime);
+        const fridayTotal = friday.isFreeDay ? 0 : calculateTotalHours(friday.startTime, friday.endTime);
+        
+        const metadata = { 
+            "__metadata": { 
+                "type": `SP.Data.UrenPerWeekListItem` 
+            } 
+        };
+        
+        const itemData = {
+            ...metadata,
+            // Monday data - convert numerical values to strings since all fields are single line text fields
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagStart]: monday.isFreeDay ? "" : monday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagEind]: monday.isFreeDay ? "" : monday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagTotaal]: mondayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.maandagSoort]: calculateDayType(monday.startTime, monday.endTime, mondayTotal),
+            
+            // Tuesday data
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagStart]: tuesday.isFreeDay ? "" : tuesday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagEind]: tuesday.isFreeDay ? "" : tuesday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagTotaal]: tuesdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.dinsdagSoort]: calculateDayType(tuesday.startTime, tuesday.endTime, tuesdayTotal),
+            
+            // Wednesday data
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagStart]: wednesday.isFreeDay ? "" : wednesday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagEind]: wednesday.isFreeDay ? "" : wednesday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagTotaal]: wednesdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.woensdagSoort]: calculateDayType(wednesday.startTime, wednesday.endTime, wednesdayTotal),
+            
+            // Thursday data
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagStart]: thursday.isFreeDay ? "" : thursday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagEind]: thursday.isFreeDay ? "" : thursday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagTotaal]: thursdayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.donderdagSoort]: calculateDayType(thursday.startTime, thursday.endTime, thursdayTotal),
+            
+            // Friday data
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagStart]: friday.isFreeDay ? "" : friday.startTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagEind]: friday.isFreeDay ? "" : friday.endTime,
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagTotaal]: fridayTotal.toString(),
+            [SP_CONFIG.lists.urenPerWeek.fields.vrijdagSoort]: calculateDayType(friday.startTime, friday.endTime, fridayTotal)
+        };
+
+        console.log("Updating UrenPerWeek item with data:", itemData);
+
+        // Fixed URL - removed the incorrect "web/" segment
+        const response = await fetch(
+            `${SP_CONFIG.apiUrl}/lists(guid'${SP_CONFIG.lists.urenPerWeek.guid}')/items(${itemId})`,
+            {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json;odata=verbose",
+                    "Content-Type": "application/json;odata=verbose",
+                    "X-RequestDigest": formDigest,
+                    "IF-MATCH": "*",
+                    "X-HTTP-Method": "MERGE"
+                },
+                body: JSON.stringify(itemData)
+            }
+        );
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Error updating UrenPerWeek item:", response.status, errorText);
+            throw new Error(`Error updating UrenPerWeek item: ${response.status}`);
+        }
+        
+        console.log("Successfully updated UrenPerWeek item:", itemId);
+        return true;
+    } catch (error) {
+        console.error("Exception updating UrenPerWeek item:", error);
+        throw error;
+    }
+}
+
+// Function to save employee work hours to UrenPerWeek list
+async function saveEmployeeWorkHours(employeeId, workHoursData) {
+    try {
+        // Convert to string since all fields in UrenPerWeek are single line text fields
+        const medewerkerId = employeeId.toString();
+        console.log(`Saving work hours for employee with ID: ${medewerkerId}`);
+
+        // Add isFreeDay property for days if not present (needed for the rest of the processing)
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        days.forEach(day => {
+            if (!workHoursData.workDays[day].hasOwnProperty('isFreeDay')) {
+                // If there's no start or end time, treat it as a free day
+                workHoursData.workDays[day].isFreeDay = 
+                    !workHoursData.workDays[day].startTime || 
+                    !workHoursData.workDays[day].endTime;
+            }
+        });
+
+        // Check if an entry already exists in the UrenPerWeek list
+        const urenPerWeekListItem = await getUrenPerWeekForEmployee(medewerkerId);
+        
+        let result;
+        if (urenPerWeekListItem) {
+            // Update existing entry
+            console.log(`Updating existing UrenPerWeek entry with ID: ${urenPerWeekListItem.Id}`);
+            result = await updateUrenPerWeekItem(urenPerWeekListItem.Id, medewerkerId, workHoursData);
+        } else {
+            // Create new entry
+            console.log(`Creating new UrenPerWeek entry for employee ID: ${medewerkerId}`);
+            result = await createUrenPerWeekItem(medewerkerId, workHoursData);
+        }
+        
+        console.log("UrenPerWeek save result:", result);
+        return result;
+    } catch (error) {
+        console.error("Error saving employee work hours:", error);
+        throw error;
+    }
+}
+
+// Enhanced collectWorkHoursData function
+function collectWorkHoursData() {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+    const workDays = {};
+    let totalWeeklyHours = 0;
+    
+    days.forEach(day => {
+        const startInput = document.getElementById(`${day}-start`);
+        const endInput = document.getElementById(`${day}-end`);
+        const freeCheckbox = document.getElementById(`${day}-free`);
+        
+        const isFreeDay = freeCheckbox.checked;
+        const startTime = isFreeDay ? "" : startInput.value;
+        const endTime = isFreeDay ? "" : endInput.value;
+        
+        // Calculate hours for this day
+        const hoursForDay = isFreeDay ? 0 : calculateTotalHours(startTime, endTime);
+        totalWeeklyHours += hoursForDay;
+        
+        workDays[day] = {
+            startTime,
+            endTime,
+            isFreeDay,
+            hours: hoursForDay
+        };
+    });
+    
+    return {
+        workDays,
+        totalWeeklyHours
+    };
+}
+
 function handleSaveUserSettings() {
-    // Verzamel instellingen van formulier
+    // Collect settings from the form
     const settings = {
         defaultView: defaultViewSelect.value,
         defaultTeam: defaultTeamSelect.value,
@@ -518,71 +861,93 @@ function handleSaveUserSettings() {
             type: settingsWorkScheduleSelect.value,
             workDays: {
                 monday: {
-                    hours: parseInt(document.getElementById("monday-hours").value) || 0,
-                    type: document.getElementById("monday-type").value
+                    startTime: document.getElementById("monday-start").value,
+                    endTime: document.getElementById("monday-end").value
                 },
                 tuesday: {
-                    hours: parseInt(document.getElementById("tuesday-hours").value) || 0,
-                    type: document.getElementById("tuesday-type").value
+                    startTime: document.getElementById("tuesday-start").value,
+                    endTime: document.getElementById("tuesday-end").value
                 },
                 wednesday: {
-                    hours: parseInt(document.getElementById("wednesday-hours").value) || 0,
-                    type: document.getElementById("wednesday-type").value
+                    startTime: document.getElementById("wednesday-start").value,
+                    endTime: document.getElementById("wednesday-end").value
                 },
                 thursday: {
-                    hours: parseInt(document.getElementById("thursday-hours").value) || 0,
-                    type: document.getElementById("thursday-type").value
+                    startTime: document.getElementById("thursday-start").value,
+                    endTime: document.getElementById("thursday-end").value
                 },
                 friday: {
-                    hours: parseInt(document.getElementById("friday-hours").value) || 0,
-                    type: document.getElementById("friday-type").value
+                    startTime: document.getElementById("friday-start").value,
+                    endTime: document.getElementById("friday-end").value
                 }
             }
         }
     };
-    
-    // Sla instellingen op
+
+    // Calculate total hours and day types
+    const days = Object.keys(settings.workSchedule.workDays);
+    let totalWeeklyHours = 0;
+
+    days.forEach(day => {
+        const { startTime, endTime } = settings.workSchedule.workDays[day];
+        const totalHours = calculateTotalHours(startTime, endTime);
+        totalWeeklyHours += totalHours;
+
+        // Update the Totaal and Soort fields
+        settings.workSchedule.workDays[day].totalHours = totalHours;
+        settings.workSchedule.workDays[day].type = calculateDayType(startTime, endTime, totalHours);
+
+        // Safely update the calculated hours and type on the form
+        const totalElement = document.getElementById(`${day}-total`);
+        const typeElement = document.getElementById(`${day}-type`);
+
+        if (totalElement) {
+            totalElement.textContent = `${totalHours} uur`;
+        } else {
+            console.warn(`Element with id '${day}-total' not found.`);
+        }
+
+        if (typeElement) {
+            typeElement.textContent = settings.workSchedule.workDays[day].type;
+        } else {
+            console.warn(`Element with id '${day}-type' not found.`);
+        }
+    });
+
+    // Update the total weekly hours on the form
+    const weeklyTotalElement = document.getElementById("weekly-total");
+    if (weeklyTotalElement) {
+        weeklyTotalElement.textContent = `${totalWeeklyHours} uur`;
+    } else {
+        console.warn("Element with id 'weekly-total' not found.");
+    }
+
+    // Save the settings
     saveUserSettings(settings);
-    
-    // Update ook het werkschema in de database als de gebruiker is geregistreerd
+
+    // Save to the UrenPerWeek list
     if (state.isRegistered) {
         const employee = state.employees.find(emp => 
             emp.email && state.currentUser && 
             emp.email.toLowerCase() === state.currentUser.email.toLowerCase()
         );
-        
+
         if (employee) {
-            // Verzamel data uit de werkschema UI
-            const workHoursData = collectWorkHoursData();
-            
-            updateEmployeeWorkSchedule(employee.id, {
-                weeklyHours: workHoursData.totalWeeklyHours,
-                workSchedule: settings.workSchedule.type,
-                workDays: JSON.stringify(workHoursData.workDays),
-                halfDayType: getHalfDayType(settings.workSchedule.workDays),
-                halfDayOfWeek: getHalfDayOfWeek(settings.workSchedule.workDays)
-            })
-            .then(() => {
-                showSnackbar('Werkschema bijgewerkt', 'success');
-                
-                // Update de lokale employee data
-                employee.weeklyHours = settings.workSchedule.weeklyHours;
-                employee.workSchedule = settings.workSchedule.type;
-                employee.workDays = settings.workSchedule.workDays;
-                employee.halfDayType = getHalfDayType(settings.workSchedule.workDays);
-                employee.halfDayOfWeek = getHalfDayOfWeek(settings.workSchedule.workDays);
-            })
-            .catch(error => {
-                console.error('Fout bij bijwerken werkschema:', error);
-                showSnackbar('Fout bij bijwerken werkschema', 'error');
-            });
+            saveEmployeeWorkHours(employee.id, settings.workSchedule)
+                .then(() => {
+                    showSnackbar('Werkschema bijgewerkt', 'success');
+                })
+                .catch(error => {
+                    console.error('Fout bij bijwerken werkschema:', error);
+                    showSnackbar('Fout bij bijwerken werkschema', 'error');
+                });
         }
     }
-    
-    // Sluit modal
+
+    // Close the modal
     userSettingsModal.classList.remove("active");
-    
-    // Toon bevestiging
+
+    // Show confirmation
     showSnackbar('Instellingen opgeslagen', 'success');
 }
 
@@ -630,7 +995,16 @@ function switchSettingsTab(tabId) {
             
             // If this is the work schedule tab, initialize the UI
             if (tabId === 'work-schedule') {
-                initWorkScheduleUI();
+                try {
+                    // Use the new function in werkschema-tijden.js to initialize the settings form
+                    if (typeof initSettingsWorkSchedule === 'function') {
+                        initSettingsWorkSchedule();
+                    } else {
+                        console.error('initSettingsWorkSchedule function is not defined');
+                    }
+                } catch (e) {
+                    console.error('Error initializing work schedule UI:', e);
+                }
             }
         } else {
             content.classList.remove('active');
@@ -659,6 +1033,54 @@ function initWorkScheduleUI() {
         // Update the clone's content to match our settings needs
         workScheduleContainer.appendChild(workDaysClone);
         
+        // Add event listeners for time inputs to update hours in real-time
+        const timeInputs = workScheduleContainer.querySelectorAll('input[type="time"]');
+        timeInputs.forEach(input => {
+            // Use both input and change events for immediate feedback
+            ['input', 'change'].forEach(eventType => {
+                input.addEventListener(eventType, function() {
+                    const dayId = this.id.split('-')[0];
+                    const startInput = document.getElementById(`${dayId}-start`);
+                    const endInput = document.getElementById(`${dayId}-end`);
+                    
+                    if (startInput && endInput && startInput.value && endInput.value) {
+                        // Calculate hours based on start and end time
+                        const hours = calculateTotalHours(startInput.value, endInput.value);
+                        const hoursDisplay = document.getElementById(`${dayId}-hours-display`);
+                        if (hoursDisplay) {
+                            hoursDisplay.textContent = `${hours} uren`;
+                        }
+                        
+                        // Update total weekly hours
+                        updateTotalWeeklyHours();
+                    }
+                });
+            });
+        });
+        
+        // Add event listeners for free day checkboxes
+        const freeCheckboxes = workScheduleContainer.querySelectorAll('.free-day-checkbox');
+        freeCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const dayId = this.id.split('-')[0];
+                const startInput = document.getElementById(`${dayId}-start`);
+                const endInput = document.getElementById(`${dayId}-end`);
+                const hoursDisplay = document.getElementById(`${dayId}-hours-display`);
+                
+                if (this.checked) {
+                    // If checked, show 0 hours
+                    if (hoursDisplay) hoursDisplay.textContent = '0 uren';
+                } else if (startInput && endInput && startInput.value && endInput.value) {
+                    // If unchecked and we have times, calculate hours
+                    const hours = calculateTotalHours(startInput.value, endInput.value);
+                    if (hoursDisplay) hoursDisplay.textContent = `${hours} uren`;
+                }
+                
+                // Update total weekly hours
+                updateTotalWeeklyHours();
+            });
+        });
+        
         // Get the current work schedule data for the logged-in user
         if (state.isRegistered && state.currentUser) {
             const employee = state.employees.find(emp => 
@@ -672,7 +1094,9 @@ function initWorkScheduleUI() {
         }
         
         // Initialize work hours UI listeners
-        initWorkHoursUI();
+        if (typeof initWorkHoursUI === 'function') {
+            initWorkHoursUI();
+        }
     }
 }
 

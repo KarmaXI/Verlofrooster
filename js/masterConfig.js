@@ -96,6 +96,14 @@ window.SP_CONFIG = {
         title: "Title",
       },
     },
+    dagenIndicators: {
+      guid: "45528ed2-cdff-4958-82e4-e3eb032fd0aa", 
+      fields: {
+        titel: "Titel",
+        kleur: "Kleur",
+        patroon: "Patroon",
+      },
+    },
   },
   // Day type indicators mapping
   dayTypeIndicators: {
