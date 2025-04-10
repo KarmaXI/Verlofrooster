@@ -581,6 +581,7 @@ class DagenIndicators {
 document.addEventListener('DOMContentLoaded', () => {
   window.dagenIndicators = new DagenIndicators();
 });
+<<<<<<< HEAD
 
 /**
  * Dagen-Indicators Functionality

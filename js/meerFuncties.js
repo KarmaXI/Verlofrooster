@@ -65,6 +65,7 @@ async function fetchUserInfo(email) {
     }
 
     try {
+<<<<<<< HEAD
         // Use findEmployeeByEmail to get employee info instead of using People Manager
         const employee = findEmployeeByEmail(email);
         if (employee) {
@@ -106,6 +107,47 @@ async function fetchUserInfo(email) {
         USER_INFO_CONFIG.userCache[email] = basicUserInfo;
         USER_INFO_CONFIG.lastUpdate[email] = Date.now();
         return basicUserInfo;
+=======
+        const response = await fetch(`${SP_CONFIG.apiUrl}/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='i:0%23.f|membership|${email}'&$select=DisplayName,Email,Title,UserProfileProperties`, {
+            headers: {
+                Accept: "application/json;odata=verbose"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error fetching user info: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const userProperties = {};
+        
+        if (data.d && data.d.UserProfileProperties && data.d.UserProfileProperties.results) {
+            data.d.UserProfileProperties.results.forEach(prop => {
+                userProperties[prop.Key] = prop.Value;
+            });
+        }
+        
+        console.log('User profile properties:', userProperties);
+        
+        // Create a comprehensive user info object
+        const userInfo = {
+            name: data.d.DisplayName || 'N/A',
+            email: email,
+            phone: userProperties.WorkPhone || userProperties.CellPhone || userProperties.HomePhone || 'Geen telefoonnummer',
+            aboutMe: userProperties.AboutMe || userProperties.Notes || 'Geen persoonlijke informatie beschikbaar',
+            jobTitle: userProperties.Title || data.d.Title || 'Geen functietitel',
+            department: userProperties.Department || 'Geen afdeling',
+            office: userProperties.Office || userProperties.Location || 'Geen locatie',
+            manager: userProperties.Manager || 'Geen manager',
+            skills: userProperties.Skills || 'Geen vaardigheden vermeld',
+            pictureUrl: getProfilePictureUrl(email)
+        };
+
+        // Cache the result
+        USER_INFO_CONFIG.userCache[email] = userInfo;
+        USER_INFO_CONFIG.lastUpdate[email] = Date.now();
+        return userInfo;
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
     } catch (error) {
         console.error('Error fetching user info:', error);
         
@@ -504,6 +546,7 @@ function populateDefaultTeamSelect() {
         });
 }
 
+<<<<<<< HEAD
 // Calculate total hours between start and end time
 function calculateTotalHours(startTime, endTime) {
     if (!startTime || !endTime) {
@@ -847,6 +890,10 @@ function collectWorkHoursData() {
 
 function handleSaveUserSettings() {
     // Collect settings from the form
+=======
+function handleSaveUserSettings() {
+    // Verzamel instellingen van formulier
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
     const settings = {
         defaultView: defaultViewSelect.value,
         defaultTeam: defaultTeamSelect.value,
@@ -861,6 +908,7 @@ function handleSaveUserSettings() {
             type: settingsWorkScheduleSelect.value,
             workDays: {
                 monday: {
+<<<<<<< HEAD
                     startTime: document.getElementById("monday-start").value,
                     endTime: document.getElementById("monday-end").value
                 },
@@ -879,10 +927,31 @@ function handleSaveUserSettings() {
                 friday: {
                     startTime: document.getElementById("friday-start").value,
                     endTime: document.getElementById("friday-end").value
+=======
+                    hours: parseInt(document.getElementById("monday-hours").value) || 0,
+                    type: document.getElementById("monday-type").value
+                },
+                tuesday: {
+                    hours: parseInt(document.getElementById("tuesday-hours").value) || 0,
+                    type: document.getElementById("tuesday-type").value
+                },
+                wednesday: {
+                    hours: parseInt(document.getElementById("wednesday-hours").value) || 0,
+                    type: document.getElementById("wednesday-type").value
+                },
+                thursday: {
+                    hours: parseInt(document.getElementById("thursday-hours").value) || 0,
+                    type: document.getElementById("thursday-type").value
+                },
+                friday: {
+                    hours: parseInt(document.getElementById("friday-hours").value) || 0,
+                    type: document.getElementById("friday-type").value
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
                 }
             }
         }
     };
+<<<<<<< HEAD
 
     // Calculate total hours and day types
     const days = Object.keys(settings.workSchedule.workDays);
@@ -926,11 +995,19 @@ function handleSaveUserSettings() {
     saveUserSettings(settings);
 
     // Save to the UrenPerWeek list
+=======
+    
+    // Sla instellingen op
+    saveUserSettings(settings);
+    
+    // Update ook het werkschema in de database als de gebruiker is geregistreerd
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
     if (state.isRegistered) {
         const employee = state.employees.find(emp => 
             emp.email && state.currentUser && 
             emp.email.toLowerCase() === state.currentUser.email.toLowerCase()
         );
+<<<<<<< HEAD
 
         if (employee) {
             saveEmployeeWorkHours(employee.id, settings.workSchedule)
@@ -948,6 +1025,41 @@ function handleSaveUserSettings() {
     userSettingsModal.classList.remove("active");
 
     // Show confirmation
+=======
+        
+        if (employee) {
+            // Verzamel data uit de werkschema UI
+            const workHoursData = collectWorkHoursData();
+            
+            updateEmployeeWorkSchedule(employee.id, {
+                weeklyHours: workHoursData.totalWeeklyHours,
+                workSchedule: settings.workSchedule.type,
+                workDays: JSON.stringify(workHoursData.workDays),
+                halfDayType: getHalfDayType(settings.workSchedule.workDays),
+                halfDayOfWeek: getHalfDayOfWeek(settings.workSchedule.workDays)
+            })
+            .then(() => {
+                showSnackbar('Werkschema bijgewerkt', 'success');
+                
+                // Update de lokale employee data
+                employee.weeklyHours = settings.workSchedule.weeklyHours;
+                employee.workSchedule = settings.workSchedule.type;
+                employee.workDays = settings.workSchedule.workDays;
+                employee.halfDayType = getHalfDayType(settings.workSchedule.workDays);
+                employee.halfDayOfWeek = getHalfDayOfWeek(settings.workSchedule.workDays);
+            })
+            .catch(error => {
+                console.error('Fout bij bijwerken werkschema:', error);
+                showSnackbar('Fout bij bijwerken werkschema', 'error');
+            });
+        }
+    }
+    
+    // Sluit modal
+    userSettingsModal.classList.remove("active");
+    
+    // Toon bevestiging
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
     showSnackbar('Instellingen opgeslagen', 'success');
 }
 
@@ -995,6 +1107,7 @@ function switchSettingsTab(tabId) {
             
             // If this is the work schedule tab, initialize the UI
             if (tabId === 'work-schedule') {
+<<<<<<< HEAD
                 try {
                     // Use the new function in werkschema-tijden.js to initialize the settings form
                     if (typeof initSettingsWorkSchedule === 'function') {
@@ -1005,6 +1118,9 @@ function switchSettingsTab(tabId) {
                 } catch (e) {
                     console.error('Error initializing work schedule UI:', e);
                 }
+=======
+                initWorkScheduleUI();
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
             }
         } else {
             content.classList.remove('active');
@@ -1033,6 +1149,7 @@ function initWorkScheduleUI() {
         // Update the clone's content to match our settings needs
         workScheduleContainer.appendChild(workDaysClone);
         
+<<<<<<< HEAD
         // Add event listeners for time inputs to update hours in real-time
         const timeInputs = workScheduleContainer.querySelectorAll('input[type="time"]');
         timeInputs.forEach(input => {
@@ -1081,6 +1198,8 @@ function initWorkScheduleUI() {
             });
         });
         
+=======
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
         // Get the current work schedule data for the logged-in user
         if (state.isRegistered && state.currentUser) {
             const employee = state.employees.find(emp => 
@@ -1094,9 +1213,13 @@ function initWorkScheduleUI() {
         }
         
         // Initialize work hours UI listeners
+<<<<<<< HEAD
         if (typeof initWorkHoursUI === 'function') {
             initWorkHoursUI();
         }
+=======
+        initWorkHoursUI();
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
     }
 }
 

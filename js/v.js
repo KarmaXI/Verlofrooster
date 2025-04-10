@@ -2800,7 +2800,11 @@ function handleSaveRegistration() {
   const email = registerEmailInput.value.trim();
   const team = registerTeamSelect.value;
   const functionTitle = registerFunctionInput.value.trim();
+<<<<<<< HEAD
   const role = registerRoleSelect ? registerRoleSelect.value : "";
+=======
+  const role = registerRoleSelect.value;
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
 
   if (!name || !email) {
     showSnackbar("Vul je naam en e-mail in", "error");
@@ -3994,6 +3998,7 @@ function init() {
 // Start de applicatie
 init();
 
+<<<<<<< HEAD
 // Function to find employee by email
 function findEmployeeByEmail(email) {
   if (!email) return null;
@@ -4026,3 +4031,5 @@ function fetchDagenIndicators() {
     });
 }
 
+=======
+>>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
