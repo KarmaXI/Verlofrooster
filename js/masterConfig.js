@@ -96,7 +96,6 @@ window.SP_CONFIG = {
         title: "Title",
       },
     },
-<<<<<<< HEAD
     dagenIndicators: {
       guid: "45528ed2-cdff-4958-82e4-e3eb032fd0aa", 
       fields: {
@@ -105,8 +104,6 @@ window.SP_CONFIG = {
         patroon: "Patroon",
       },
     },
-=======
->>>>>>> 9f4c84f3aa6cbf7666234d7bdd14f6fec224cae9
   },
   // Day type indicators mapping
   dayTypeIndicators: {
