@@ -148,7 +148,7 @@ const sharepointLijstConfiguraties = {
       { "titel": "HalveDagWeekdag", "interneNaam": "HalveDagWeekdag", "type": "Choice" }, // ma, di, wo, do, vr
       { "titel": "Horen", "interneNaam": "Horen", "type": "Boolean" },
       { "titel": "Naam", "interneNaam": "Naam", "type": "Text" }, // Volledige display naam
-      { "titel": "Opmerking", "interneNaam": "Opmekring", "type": "Note" }, // Let op: 'Opmekring' in doc, waarschijnlijk 'Opmerking'
+      { "titel": "Opmerking", "interneNaam": "Opmekring", "type": "Note" }, // Let op: 'Opmekring' in doc, waarschijnlijk 'Opmerking'. 'Opmekring' is een schrijftfout in de bron-lijst en dient niet gewijzigd te worden.
       { "titel": "OpmerkingGeldigTot", "interneNaam": "OpmerkingGeldigTot", "type": "DateTime" },
       { "titel": "Team", "interneNaam": "Team", "type": "Text" }, // Teamnaam, linkt naar Teams.Title
       { "titel": "UrenPerWeek", "interneNaam": "UrenPerWeek", "type": "Number" },
