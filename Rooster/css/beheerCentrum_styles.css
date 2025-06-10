@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verlofrooster - Beheercentrum</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../js/configLijst.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Full width container overrides */
+        .container {
+            max-width: none !important;
+            width: 100vw !important;
+            margin: 0 !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        
+        /* Ensure full viewport width */
+        html, body {
+            width: 100%;
+            overflow-x: auto;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Tab styling */
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background-color: #374151;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Loading animation */
+        .loading-spinner {
+            border: 3px solid #374151;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal animations */
+        .modal-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        .modal-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 300ms, transform 300ms;
+        }
+        .modal-exit {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .modal-exit-active {
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 300ms, transform 300ms;
+        }
+
+        /* Status indicators */
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-active { background-color: #10b981; }
+        .status-inactive { background-color: #ef4444; }
+        .status-pending { background-color: #f59e0b; }
+
+        /* Full width table container */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+        }
+        
+        /* Responsive table */
+        .min-w-full {
+            min-width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-800 text-gray-200 min-h-screen">
+    <!-- Global Loading Overlay -->
+    <div id="global-loading" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+            <div class="flex items-center space-x-3">
+                <div class="loading-spinner"></div>
+                <span id="loading-message" class="text-white">Laden...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Notification -->
+    <div id="global-notification" class="hidden fixed top-4 right-4 max-w-sm z-40 transition-all duration-300">
+        <div class="bg-blue-500 text-white p-4 rounded-lg shadow-lg">
+            <div class="flex justify-between items-start">
+                <span id="notification-message"></span>
+                <button onclick="hideNotification()" class="text-white hover:text-gray-200 ml-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full width container -->
+    <div class="w-full px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-white">Verlofrooster Beheercentrum</h1>
+                    <p class="mt-2 text-gray-400">Beheer medewerkers, teams, verlofredenen en andere kerngegevens</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-400">
+                        <span id="current-user">Gebruiker wordt geladen...</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        <span id="connection-status">Verbinden...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="mb-6 border-b border-gray-700">
+            <nav class="flex flex-wrap -mb-px space-x-2" id="tab-navigation">
+                <button data-tab="medewerkers" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"></path>
+                    </svg>
+                    Medewerkers
+                </button>
+                <button data-tab="dagen-indicators" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+                    </svg>
+                    Dag Indicatoren
+                </button>
+                <button data-tab="functies" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    Functies
+                </button>
+                <button data-tab="verlofredenen" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+                    </svg>
+                    Verlofredenen
+                </button>
+                <button data-tab="teams" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"></path>
+                    </svg>
+                    Teams
+                </button>
+                <button data-tab="seniors" class="tab-button py-3 px-4 text-sm font-medium text-center text-gray-400 border-b-2 border-transparent rounded-t-lg hover:text-blue-400 hover:border-blue-400 whitespace-nowrap">
+                    <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                    Seniors
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <main id="tab-content-container" class="w-full">
+            <!-- Content will be dynamically generated -->
+        </main>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 py-6 border-t border-gray-700">
+            <a href="../verlofrooster.aspx" class="text-blue-400 hover:text-blue-300 hover:underline">
+                ← Terug naar het Verlofrooster
+            </a>
+            <p class="text-xs text-gray-500 mt-2">
+                © <span id="current-year"></span> Verlofrooster Applicatie
+            </p>
+        </footer>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div class="flex justify-between items-center p-6 border-b border-gray-600">
+                <h3 id="modal-title" class="text-lg font-semibold text-white">Item bewerken</h3>
+                <button id="modal-close" class="text-gray-400 hover:text-white transition-colors">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <form id="modal-form" class="space-y-4">
+                    <div id="modal-fields"></div>
+                </form>
+                <div id="modal-status" class="mt-4 text-sm"></div>
+            </div>
+            <div class="flex justify-end space-x-3 p-6 border-t border-gray-600">
+                <button id="modal-cancel" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+                    Annuleren
+                </button>
+                <button id="modal-save" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                    Opslaan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-700 rounded-lg shadow-xl max-w-md w-full">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0">
+                        <svg class="w-6 h-6 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-medium text-white">Bevestiging vereist</h3>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <p id="confirm-message" class="text-gray-300"></p>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button id="confirm-cancel" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+                        Annuleren
+                    </button>
+                    <button id="confirm-delete" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors">
+                        Verwijderen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration mapping for tabs to SharePoint lists
+        const TAB_CONFIG = {
+            'medewerkers': 'Medewerkers',
+            'dagen-indicators': 'DagenIndicators', 
+            'functies': 'keuzelijstFuncties',
+            'verlofredenen': 'Verlofredenen',
+            'teams': 'Teams',
+            'seniors': 'Seniors'
+        };
+
+        // Global state
+        let sharePointContext = {
+            siteUrl: '',
+            requestDigest: ''
+        };
+        let currentTab = null;
+        let currentModalData = null;
+
+        // Utility function to sanitize username
+        function sanitizeUsername(username) {
+            if (!username) return '';
+            
+            // Remove leading/trailing spaces
+            username = username.trim();
+            
+            // Extract domain\username part (e.g., from "i:0#.w|org\busselW" get "org\busselw")
+            if (username.includes('|')) {
+                username = username.split('|')[1] || username;
+            }
+            
+            // Convert to lowercase
+            username = username.toLowerCase();
+            
+            return username;
+        }
+
+        // Function to check if field should be hidden (exact ID match, not ending with ID)
+        function shouldHideField(fieldName) {
+            if (!fieldName) return false;
+            
+            // Hide exact matches of 'ID' or 'id', but not fields ending with ID like 'MedewerkerID'
+            const normalizedName = fieldName.toLowerCase();
+            return normalizedName === 'id';
+        }
+
+        // Function to determine if field should be date/time picker
+        function isDateTimeField(fieldName, fieldType) {
+            if (!fieldName) return { isDateTime: false, type: 'text' };
+            
+            const normalizedName = fieldName.toLowerCase();
+            
+            // Check if it's already a DateTime or Date type
+            if (fieldType === 'DateTime') return { isDateTime: true, type: 'datetime-local' };
+            if (fieldType === 'Date') return { isDateTime: true, type: 'date' };
+            
+            // Check for fields ending with 'einde' or containing 'start'
+            if (normalizedName.endsWith('einde') || normalizedName.includes('start')) {
+                return { isDateTime: true, type: 'datetime-local' };
+            }
+            
+            // Check for common date/time field patterns
+            if (normalizedName.includes('datum') || normalizedName.includes('tijd')) {
+                return { isDateTime: true, type: 'datetime-local' };
+            }
+            
+            return { isDateTime: false, type: 'text' };
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('current-year').textContent = new Date().getFullYear();
+            
+            showLoading('Verbinding maken met SharePoint...');
+            
+            try {
+                await initializeSharePointContext();
+                await loadCurrentUser();
+                setupEventListeners();
+                
+                // Load first available tab
+                const firstTab = Object.keys(TAB_CONFIG)[0];
+                await switchTab(firstTab);
+                
+                showNotification('Beheercentrum succesvol geladen', 'success');
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showNotification('Fout bij laden van beheercentrum: ' + error.message, 'error');
+                document.getElementById('connection-status').textContent = 'Verbindingsfout';
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Initialize SharePoint context
+        async function initializeSharePointContext() {
+            try {
+                // Extract site URL from current location
+                const currentUrl = window.location.href;
+                const urlParts = currentUrl.split('/CPW/');
+                if (urlParts.length < 2) {
+                    throw new Error('Ongeldige URL structuur');
+                }
+                
+                sharePointContext.siteUrl = urlParts[0];
+                document.getElementById('connection-status').textContent = `Verbonden met: ${sharePointContext.siteUrl}`;
+                
+                // Get request digest
+                const response = await fetch(`${sharePointContext.siteUrl}/_api/contextinfo`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json;odata=verbose'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`SharePoint context fout: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                sharePointContext.requestDigest = data.d.GetContextWebInformation.FormDigestValue;
+                
+                console.log('SharePoint context initialized:', sharePointContext.siteUrl);
+            } catch (error) {
+                throw new Error('Kan geen verbinding maken met SharePoint: ' + error.message);
+            }
+        }
+
+        // Load current user info
+        async function loadCurrentUser() {
+            try {
+                const response = await fetch(`${sharePointContext.siteUrl}/_api/web/currentuser`, {
+                    headers: {
+                        'Accept': 'application/json;odata=verbose'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('current-user').textContent = data.d.Title || 'Onbekende gebruiker';
+                }
+            } catch (error) {
+                console.warn('Could not load current user:', error);
+                document.getElementById('current-user').textContent = 'Gebruiker onbekend';
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Tab navigation
+            document.getElementById('tab-navigation').addEventListener('click', async (e) => {
+                if (e.target.matches('.tab-button')) {
+                    const tabName = e.target.dataset.tab;
+                    await switchTab(tabName);
+                }
+            });
+
+            // Modal event listeners
+            document.getElementById('modal-close').addEventListener('click', closeModal);
+            document.getElementById('modal-cancel').addEventListener('click', closeModal);
+            document.getElementById('modal-save').addEventListener('click', saveModalData);
+            
+            // Confirmation modal
+            document.getElementById('confirm-cancel').addEventListener('click', closeConfirmModal);
+            document.getElementById('confirm-delete').addEventListener('click', executeDelete);
+
+            // Close modals when clicking outside
+            document.getElementById('edit-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'edit-modal') closeModal();
+            });
+            document.getElementById('confirm-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'confirm-modal') closeConfirmModal();
+            });
+        }
+
+        // Switch to a specific tab
+        async function switchTab(tabName) {
+            if (!TAB_CONFIG[tabName]) {
+                showNotification('Onbekende tab: ' + tabName, 'error');
+                return;
+            }
+
+            // Update tab appearance
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('text-gray-400');
+                btn.classList.remove('text-blue-400', 'border-blue-500');
+            });
+
+            const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+            if (activeTab) {
+                activeTab.classList.add('active', 'text-blue-400', 'border-blue-500');
+                activeTab.classList.remove('text-gray-400');
+            }
+
+            currentTab = tabName;
+            
+            showLoading(`Laden van ${tabName}...`);
+            try {
+                await loadTabContent(tabName);
+            } catch (error) {
+                showNotification('Fout bij laden van gegevens: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Load content for a specific tab
+        async function loadTabContent(tabName) {
+            const listName = TAB_CONFIG[tabName];
+            const config = window.getLijstConfig ? window.getLijstConfig(listName) : null;
+            
+            if (!config) {
+                throw new Error(`Configuratie niet gevonden voor ${listName}`);
+            }
+
+            // Create tab content container
+            const container = document.getElementById('tab-content-container');
+            container.innerHTML = createTabContentHTML(tabName, config);
+
+            // Load list data
+            await loadListData(listName, config);
+        }
+
+        // Create HTML for tab content
+        function createTabContentHTML(tabName, config) {
+            const displayName = getDisplayName(tabName);
+            const singularName = getSingularName(tabName);
+            
+            return `
+                <div class="space-y-6 w-full">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-semibold text-white">${displayName}</h2>
+                            <p class="text-gray-400 mt-1">Beheer ${displayName.toLowerCase()} in het systeem</p>
+                        </div>
+                        <button onclick="openCreateModal('${tabName}')" class="inline-flex items-center px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg shadow transition-colors">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            ${singularName} toevoegen
+                        </button>
+                    </div>
+                    
+                    <div class="bg-gray-700 rounded-lg shadow-md overflow-hidden w-full">
+                        <div class="table-container">
+                            <table class="min-w-full divide-y divide-gray-600">
+                                <thead id="table-header-${tabName}" class="bg-gray-600">
+                                    <!-- Headers will be populated dynamically -->
+                                </thead>
+                                <tbody id="table-body-${tabName}" class="bg-gray-700 divide-y divide-gray-600">
+                                    <!-- Rows will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="px-6 py-3 bg-gray-600 border-t border-gray-500">
+                            <div class="flex justify-between items-center">
+                                <span id="table-status-${tabName}" class="text-sm text-gray-300">Laden...</span>
+                                <button onclick="refreshCurrentTab()" class="text-blue-400 hover:text-blue-300 text-sm">
+                                    <svg class="w-4 h-4 inline-block mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    Vernieuwen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load data from SharePoint list
+        async function loadListData(listName, config) {
+            try {
+                const selectFields = getSelectFields(config);
+                const expandFields = getExpandFields(config);
+                
+                let url = `${sharePointContext.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(config.lijstTitel)}')/items`;
+                url += `?$select=${selectFields.join(',')}`;
+                if (expandFields.length > 0) {
+                    url += `&$expand=${expandFields.join(',')}`;
+                }
+                url += '&$top=1000';
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json;odata=verbose'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Fout bij ophalen data: ${response.status} ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                displayTableData(currentTab, config, data.d.results || []);
+                
+            } catch (error) {
+                console.error('Error loading list data:', error);
+                document.getElementById(`table-status-${currentTab}`).textContent = 'Fout bij laden: ' + error.message;
+                throw error;
+            }
+        }
+
+        // Get fields to select from SharePoint
+        function getSelectFields(config) {
+            const fields = ['Id'];
+            if (config.velden) {
+                config.velden.forEach(field => {
+                    if (field.interneNaam && !fields.includes(field.interneNaam) && !shouldHideField(field.interneNaam)) {
+                        fields.push(field.interneNaam);
+                    }
+                });
+            }
+            return fields;
+        }
+
+        // Get fields to expand (for lookups)
+        function getExpandFields(config) {
+            const expandFields = [];
+            if (config.velden) {
+                config.velden.forEach(field => {
+                    if ((field.type === 'Lookup' || field.type === 'User') && !shouldHideField(field.interneNaam)) {
+                        if (field.interneNaam && field.interneNaam !== 'Author' && field.interneNaam !== 'Editor') {
+                            expandFields.push(field.interneNaam);
+                        }
+                    }
+                });
+            }
+            return expandFields;
+        }
+
+        // Display data in table
+        function displayTableData(tabName, config, items) {
+            const headerElement = document.getElementById(`table-header-${tabName}`);
+            const bodyElement = document.getElementById(`table-body-${tabName}`);
+            const statusElement = document.getElementById(`table-status-${tabName}`);
+
+            if (!headerElement || !bodyElement || !statusElement) {
+                console.error('Table elements not found for tab:', tabName);
+                return;
+            }
+
+            // Create header - filter out ID fields
+            const visibleFields = (config.velden || []).filter(field => 
+                !shouldHideField(field.interneNaam) && field.titel !== 'Id'
+            );
+
+            headerElement.innerHTML = `
+                <tr>
+                    ${visibleFields.map(field => 
+                        `<th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                            ${field.titel}
+                        </th>`
+                    ).join('')}
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                        Acties
+                    </th>
+                </tr>
+            `;
+
+            // Create rows
+            if (items.length === 0) {
+                bodyElement.innerHTML = `
+                    <tr>
+                        <td colspan="${visibleFields.length + 1}" class="px-6 py-8 text-center text-gray-400">
+                            Geen items gevonden
+                        </td>
+                    </tr>
+                `;
+                statusElement.textContent = 'Geen items';
+                return;
+            }
+
+            bodyElement.innerHTML = items.map(item => `
+                <tr class="hover:bg-gray-600 transition-colors">
+                    ${visibleFields.map(field => `
+                        <td class="px-6 py-4 text-sm text-gray-200">
+                            ${formatFieldValue(item, field)}
+                        </td>
+                    `).join('')}
+                    <td class="px-6 py-4 text-right text-sm">
+                        <div class="flex justify-end space-x-2">
+                            <button onclick="openEditModal('${tabName}', ${item.Id})" 
+                                    class="text-blue-400 hover:text-blue-300 transition-colors" 
+                                    title="Bewerken">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+                                </svg>
+                            </button>
+                            <button onclick="confirmDelete('${tabName}', ${item.Id}, '${getItemDisplayName(item, config)}')" 
+                                    class="text-red-400 hover:text-red-300 transition-colors" 
+                                    title="Verwijderen">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            statusElement.textContent = `${items.length} item${items.length !== 1 ? 's' : ''} geladen`;
+        }
+
+        // Format field value for display
+        function formatFieldValue(item, field) {
+            let value = item[field.interneNaam];
+            
+            if (value === null || value === undefined) {
+                return '<span class="text-gray-500">-</span>';
+            }
+
+            // Handle username fields with sanitization
+            const fieldName = field.interneNaam.toLowerCase();
+            if (fieldName.includes('username') || fieldName.includes('gebruikersnaam') || 
+                fieldName.includes('gnaam') || fieldName.includes('medewerkerid')) {
+                value = sanitizeUsername(value);
+            }
+
+            switch (field.type) {
+                case 'Boolean':
+                    return value ? 
+                        '<span class="status-indicator status-active"></span>Ja' :
+                        '<span class="status-indicator status-inactive"></span>Nee';
+                        
+                case 'DateTime':
+                case 'Date':
+                    return new Date(value).toLocaleDateString('nl-NL');
+                    
+                case 'User':
+                case 'Lookup':
+                    return value.Title || value.Name || value;
+                    
+                default:
+                    const strValue = String(value);
+                    return strValue.length > 50 ? 
+                        `<span title="${strValue}">${strValue.substring(0, 50)}...</span>` : 
+                        strValue;
+            }
+        }
+
+        // Get display name for an item
+        function getItemDisplayName(item, config) {
+            if (item.Title) return item.Title;
+            if (item.Naam) return item.Naam;
+            
+            const displayField = config.velden?.find(f => f.titel === 'Naam' || f.titel === 'Titel');
+            if (displayField && item[displayField.interneNaam]) {
+                return item[displayField.interneNaam];
+            }
+            
+            return `Item ${item.Id}`;
+        }
+
+        // Modal functions
+        function openCreateModal(tabName) {
+            const listName = TAB_CONFIG[tabName];
+            const config = window.getLijstConfig ? window.getLijstConfig(listName) : null;
+            
+            if (!config) {
+                showNotification('Configuratie niet gevonden', 'error');
+                return;
+            }
+
+            const singularName = getSingularName(tabName);
+            openModal(`${singularName} toevoegen`, config, null);
+        }
+
+        async function openEditModal(tabName, itemId) {
+            const listName = TAB_CONFIG[tabName];
+            const config = window.getLijstConfig ? window.getLijstConfig(listName) : null;
+            
+            if (!config) {
+                showNotification('Configuratie niet gevonden', 'error');
+                return;
+            }
+
+            showLoading('Item laden...');
+            
+            try {
+                // Fetch item data
+                const selectFields = getSelectFields(config);
+                const expandFields = getExpandFields(config);
+                
+                let url = `${sharePointContext.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(config.lijstTitel)}')/items(${itemId})`;
+                url += `?$select=${selectFields.join(',')}`;
+                if (expandFields.length > 0) {
+                    url += `&$expand=${expandFields.join(',')}`;
+                }
+
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json;odata=verbose'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Fout bij ophalen item: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const singularName = getSingularName(tabName);
+                openModal(`${singularName} bewerken`, config, data.d);
+                
+            } catch (error) {
+                showNotification('Fout bij laden item: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function openModal(title, config, itemData = null) {
+            document.getElementById('modal-title').textContent = title;
+            
+            const fieldsContainer = document.getElementById('modal-fields');
+            fieldsContainer.innerHTML = '';
+
+            // Create form fields - filter out ID fields
+            config.velden?.forEach(field => {
+                if (shouldHideField(field.interneNaam) || field.titel === 'Id') return;
+                
+                const fieldContainer = createFormField(field, itemData);
+                fieldsContainer.appendChild(fieldContainer);
+            });
+
+            currentModalData = {
+                config: config,
+                itemData: itemData,
+                isEdit: !!itemData
+            };
+
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function createFormField(field, itemData) {
+            const container = document.createElement('div');
+            container.className = 'mb-4';
+
+            const label = document.createElement('label');
+            label.className = 'block text-sm font-medium text-gray-300 mb-2';
+            label.textContent = field.titel;
+            if (field.isRequired) {
+                label.innerHTML += ' <span class="text-red-400">*</span>';
+            }
+
+            let input;
+            const currentValue = itemData ? getFieldValue(itemData, field) : '';
+            
+            // Check if this is a date/time field
+            const dateTimeInfo = isDateTimeField(field.interneNaam, field.type);
+
+            // Handle username sanitization for username fields
+            const fieldName = field.interneNaam.toLowerCase();
+            const isUsernameField = fieldName.includes('username') || fieldName.includes('gebruikersnaam') || 
+                                   fieldName.includes('gnaam') || fieldName.includes('medewerkerid');
+
+            switch (field.type) {
+                case 'Text':
+                case 'Email':
+                    input = document.createElement('input');
+                    if (dateTimeInfo.isDateTime) {
+                        input.type = dateTimeInfo.type;
+                        if (currentValue) {
+                            if (dateTimeInfo.type === 'datetime-local') {
+                                input.value = new Date(currentValue).toISOString().slice(0, 16);
+                            } else {
+                                input.value = new Date(currentValue).toISOString().split('T')[0];
+                            }
+                        }
+                    } else {
+                        input.type = field.type === 'Email' ? 'email' : 'text';
+                        let displayValue = currentValue || '';
+                        if (isUsernameField && displayValue) {
+                            displayValue = sanitizeUsername(displayValue);
+                        }
+                        input.value = displayValue;
+                    }
+                    break;
+
+                case 'Note':
+                    input = document.createElement('textarea');
+                    input.rows = 3;
+                    input.value = currentValue || '';
+                    break;
+
+                case 'Number':
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.value = currentValue || '';
+                    break;
+
+                case 'Boolean':
+                    input = document.createElement('select');
+                    input.innerHTML = `
+                        <option value="false" ${currentValue === false ? 'selected' : ''}>Nee</option>
+                        <option value="true" ${currentValue === true ? 'selected' : ''}>Ja</option>
+                    `;
+                    break;
+
+                case 'DateTime':
+                    input = document.createElement('input');
+                    input.type = 'datetime-local';
+                    if (currentValue) {
+                        input.value = new Date(currentValue).toISOString().slice(0, 16);
+                    }
+                    break;
+
+                case 'Date':
+                    input = document.createElement('input');
+                    input.type = 'date';
+                    if (currentValue) {
+                        input.value = new Date(currentValue).toISOString().split('T')[0];
+                    }
+                    break;
+
+                case 'Choice':
+                    input = document.createElement('select');
+                    input.innerHTML = '<option value="">-- Selecteer --</option>';
+                    // You would need to fetch choice values from SharePoint field metadata
+                    break;
+
+                default:
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    let displayValue = currentValue || '';
+                    if (isUsernameField && displayValue) {
+                        displayValue = sanitizeUsername(displayValue);
+                    }
+                    input.value = displayValue;
+            }
+
+            input.className = 'w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+            input.name = field.interneNaam;
+            if (field.isRequired) {
+                input.required = true;
+            }
+
+            container.appendChild(label);
+            container.appendChild(input);
+
+            return container;
+        }
+
+        function getFieldValue(itemData, field) {
+            const value = itemData[field.interneNaam];
+            
+            if (field.type === 'User' || field.type === 'Lookup') {
+                return value?.Title || value?.Name || value;
+            }
+            
+            return value;
+        }
+
+        function closeModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            document.getElementById('modal-status').innerHTML = '';
+            currentModalData = null;
+        }
+
+        async function saveModalData() {
+            if (!currentModalData) return;
+
+            const form = document.getElementById('modal-form');
+            const formData = new FormData(form);
+            const statusElement = document.getElementById('modal-status');
+            
+            statusElement.innerHTML = '';
+
+            try {
+                // Validate required fields
+                const requiredFields = currentModalData.config.velden?.filter(f => f.isRequired && !shouldHideField(f.interneNaam)) || [];
+                for (const field of requiredFields) {
+                    const value = formData.get(field.interneNaam);
+                    if (!value || value.trim() === '') {
+                        throw new Error(`${field.titel} is verplicht`);
+                    }
+                }
+
+                showLoading('Opslaan...');
+
+                // Prepare data for SharePoint
+                const itemData = {
+                    '__metadata': { 
+                        'type': `SP.Data.${currentModalData.config.lijstTitel}ListItem`
+                    }
+                };
+
+                for (const [key, value] of formData.entries()) {
+                    const field = currentModalData.config.velden?.find(f => f.interneNaam === key);
+                    if (field && !shouldHideField(field.interneNaam)) {
+                        let processedValue = value;
+
+                        // Handle username sanitization
+                        const fieldName = field.interneNaam.toLowerCase();
+                        const isUsernameField = fieldName.includes('username') || fieldName.includes('gebruikersnaam') || 
+                                               fieldName.includes('gnaam') || fieldName.includes('medewerkerid');
+                        
+                        if (isUsernameField && processedValue) {
+                            processedValue = sanitizeUsername(processedValue);
+                        }
+
+                        switch (field.type) {
+                            case 'Boolean':
+                                processedValue = value === 'true';
+                                break;
+                            case 'Number':
+                                processedValue = value ? parseInt(value, 10) : null;
+                                break;
+                            case 'DateTime':
+                            case 'Date':
+                                processedValue = value ? new Date(value).toISOString() : null;
+                                break;
+                            case 'Text':
+                                // Check if this should be treated as datetime
+                                const dateTimeInfo = isDateTimeField(field.interneNaam, field.type);
+                                if (dateTimeInfo.isDateTime && value) {
+                                    processedValue = new Date(value).toISOString();
+                                }
+                                break;
+                        }
+
+                        itemData[key] = processedValue;
+                    }
+                }
+
+                // Save to SharePoint
+                const url = currentModalData.isEdit 
+                    ? `${sharePointContext.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(currentModalData.config.lijstTitel)}')/items(${currentModalData.itemData.Id})`
+                    : `${sharePointContext.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(currentModalData.config.lijstTitel)}')/items`;
+
+                const headers = {
+                    'Accept': 'application/json;odata=verbose',
+                    'Content-Type': 'application/json;odata=verbose',
+                    'X-RequestDigest': sharePointContext.requestDigest
+                };
+
+                if (currentModalData.isEdit) {
+                    headers['IF-MATCH'] = '*';
+                    headers['X-HTTP-Method'] = 'MERGE';
+                }
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(itemData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error?.message?.value || `Fout bij opslaan: ${response.status}`);
+                }
+
+                showNotification(
+                    currentModalData.isEdit ? 'Item succesvol bijgewerkt' : 'Item succesvol toegevoegd',
+                    'success'
+                );
+                
+                closeModal();
+                await refreshCurrentTab();
+
+            } catch (error) {
+                console.error('Save error:', error);
+                statusElement.innerHTML = `<div class="text-red-400 text-sm">${error.message}</div>`;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Delete functions
+        function confirmDelete(tabName, itemId, itemName) {
+            document.getElementById('confirm-message').textContent = 
+                `Weet u zeker dat u "${itemName}" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.`;
+            
+            document.getElementById('confirm-modal').classList.remove('hidden');
+            
+            // Store delete info
+            window.pendingDelete = {
+                tabName: tabName,
+                itemId: itemId,
+                itemName: itemName
+            };
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            window.pendingDelete = null;
+        }
+
+        async function executeDelete() {
+            if (!window.pendingDelete) return;
+
+            const { tabName, itemId, itemName } = window.pendingDelete;
+            const listName = TAB_CONFIG[tabName];
+            const config = window.getLijstConfig ? window.getLijstConfig(listName) : null;
+
+            if (!config) {
+                showNotification('Configuratie niet gevonden', 'error');
+                return;
+            }
+
+            showLoading('Verwijderen...');
+            closeConfirmModal();
+
+            try {
+                const response = await fetch(
+                    `${sharePointContext.siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(config.lijstTitel)}')/items(${itemId})`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json;odata=verbose',
+                            'X-RequestDigest': sharePointContext.requestDigest,
+                            'IF-MATCH': '*',
+                            'X-HTTP-Method': 'DELETE'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Fout bij verwijderen: ${response.status}`);
+                }
+
+                showNotification(`"${itemName}" succesvol verwijderd`, 'success');
+                await refreshCurrentTab();
+
+            } catch (error) {
+                console.error('Delete error:', error);
+                showNotification('Fout bij verwijderen: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Utility functions
+        async function refreshCurrentTab() {
+            if (currentTab) {
+                await switchTab(currentTab);
+            }
+        }
+
+        function getDisplayName(tabName) {
+            const names = {
+                'medewerkers': 'Medewerkers',
+                'dagen-indicators': 'Dag Indicatoren',
+                'functies': 'Functies',
+                'verlofredenen': 'Verlofredenen',
+                'teams': 'Teams',
+                'seniors': 'Seniors'
+            };
+            return names[tabName] || tabName;
+        }
+
+        function getSingularName(tabName) {
+            const names = {
+                'medewerkers': 'Medewerker',
+                'dagen-indicators': 'Dag Indicator',
+                'functies': 'Functie',
+                'verlofredenen': 'Verlofreden',
+                'teams': 'Team',
+                'seniors': 'Senior'
+            };
+            return names[tabName] || tabName;
+        }
+
+        function showLoading(message = 'Laden...') {
+            document.getElementById('loading-message').textContent = message;
+            document.getElementById('global-loading').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('global-loading').classList.add('hidden');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('global-notification');
+            const messageEl = document.getElementById('notification-message');
+            
+            messageEl.textContent = message;
+            
+            // Remove existing type classes
+            notification.firstElementChild.classList.remove('bg-blue-500', 'bg-green-500', 'bg-red-500', 'bg-yellow-500');
+            
+            // Add appropriate type class
+            switch (type) {
+                case 'success':
+                    notification.firstElementChild.classList.add('bg-green-500');
+                    break;
+                case 'error':
+                    notification.firstElementChild.classList.add('bg-red-500');
+                    break;
+                case 'warning':
+                    notification.firstElementChild.classList.add('bg-yellow-500');
+                    break;
+                default:
+                    notification.firstElementChild.classList.add('bg-blue-500');
+            }
+            
+            notification.classList.remove('hidden');
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 5000);
+        }
+
+        function hideNotification() {
+            document.getElementById('global-notification').classList.add('hidden');
+        }
+
+        // Wait for configLijst.js to load
+        if (typeof window.getLijstConfig !== 'function') {
+            console.log('Waiting for configLijst.js to load...');
+            let attempts = 0;
+            const checkConfig = setInterval(() => {
+                attempts++;
+                if (typeof window.getLijstConfig === 'function') {
+                    console.log('configLijst.js loaded successfully');
+                    clearInterval(checkConfig);
+                } else if (attempts > 50) {
+                    console.error('configLijst.js failed to load');
+                    showNotification('Configuratie kon niet worden geladen', 'error');
+                    clearInterval(checkConfig);
+                }
+            }, 100);
+        }
+
+        // Export global functions for onclick handlers
+        window.openCreateModal = openCreateModal;
+        window.openEditModal = openEditModal;
+        window.confirmDelete = confirmDelete;
+        window.refreshCurrentTab = refreshCurrentTab;
+        window.hideNotification = hideNotification;
+    </script>
+</body>
+</html>
