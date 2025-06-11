@@ -853,12 +853,23 @@
         // Enhanced field hiding logic - improved ID detection
         function shouldHideField(fieldName) {
             if (!fieldName) return false;
-            
+
             const normalizedName = fieldName.toLowerCase();
-            
+
             // Hide exact ID matches but not fields ending with ID (like MedewerkerID)
             if (normalizedName === 'id') return true;
-            
+
+            // Additional fields to hide on the Medewerkers tab
+            const extraHidden = [
+                'halvedagtype',
+                'halvedagweekdag',
+                'urenperweek',
+                'werkdagen',
+                'werkschema',
+                'titel'
+            ];
+            if (extraHidden.includes(normalizedName)) return true;
+
             // Don't hide fields that end with 'id' but are longer (like "MedewerkerID", "TeamID", etc.)
             return false;
         }

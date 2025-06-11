@@ -139,23 +139,23 @@ const sharepointLijstConfiguraties = {
     "baseTemplate": 100,
     "velden": [
       { "titel": "Id", "interneNaam": "ID", "type": "Counter" },
-      { "titel": "Titel", "interneNaam": "Title", "type": "Text" }, // Vaak gebruikt voor een interne referentie of achternaam
+      { "titel": "Titel", "interneNaam": "Title", "type": "Text" },
+      { "titel": "Naam", "interneNaam": "Naam", "type": "Text" },
       { "titel": "Geboortedatum", "interneNaam": "Geboortedatum", "type": "DateTime" },
-      { "titel": "Actief", "interneNaam": "Actief", "type": "Boolean" },
       { "titel": "E-mail", "interneNaam": "E_x002d_mail", "type": "Text" },
-      { "titel": "Functie", "interneNaam": "Functie", "type": "Text" }, // Gevuld vanuit keuzelijstFuncties
-      { "titel": "HalveDagType", "interneNaam": "HalveDagType", "type": "Choice" }, // VVM, VVO
-      { "titel": "HalveDagWeekdag", "interneNaam": "HalveDagWeekdag", "type": "Choice" }, // ma, di, wo, do, vr
-      { "titel": "Horen", "interneNaam": "Horen", "type": "Boolean" },
-      { "titel": "Naam", "interneNaam": "Naam", "type": "Text" }, // Volledige display naam
-      { "titel": "Opmerking", "interneNaam": "Opmekring", "type": "Note" }, // Let op: 'Opmekring' in doc, waarschijnlijk 'Opmerking'. 'Opmekring' is een schrijftfout in de bron-lijst en dient niet gewijzigd te worden.
+      { "titel": "Functie", "interneNaam": "Functie", "type": "Text" },
+      { "titel": "Team", "interneNaam": "Team", "type": "Text" },
+      { "titel": "Username", "interneNaam": "Username", "type": "Text" },
+      { "titel": "Opmerking", "interneNaam": "Opmekring", "type": "Note" },
       { "titel": "OpmerkingGeldigTot", "interneNaam": "OpmerkingGeldigTot", "type": "DateTime" },
-      { "titel": "Team", "interneNaam": "Team", "type": "Text" }, // Teamnaam, linkt naar Teams.Title
-      { "titel": "UrenPerWeek", "interneNaam": "UrenPerWeek", "type": "Number" },
-      { "titel": "Username", "interneNaam": "Username", "type": "Text" }, // Cruciaal: login naam (i:0#.w|domein\\user)
+      { "titel": "Horen", "interneNaam": "Horen", "type": "Boolean" },
       { "titel": "Verbergen", "interneNaam": "Verbergen", "type": "Boolean" },
-      { "titel": "Werkdagen", "interneNaam": "Werkdagen", "type": "Note" }, // Structuur? "MA,DI,WO,DO,VR" of JSON?
-      { "titel": "Werkschema", "interneNaam": "Werkschema", "type": "Choice" } // fulltime, parttime-4 etc.
+      { "titel": "Actief", "interneNaam": "Actief", "type": "Boolean" },
+      { "titel": "HalveDagType", "interneNaam": "HalveDagType", "type": "Choice" },
+      { "titel": "HalveDagWeekdag", "interneNaam": "HalveDagWeekdag", "type": "Choice" },
+      { "titel": "UrenPerWeek", "interneNaam": "UrenPerWeek", "type": "Number" },
+      { "titel": "Werkdagen", "interneNaam": "Werkdagen", "type": "Note" },
+      { "titel": "Werkschema", "interneNaam": "Werkschema", "type": "Choice" }
     ]
   },
   "gemachtigdenLijst": {
