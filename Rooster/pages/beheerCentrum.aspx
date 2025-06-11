@@ -866,7 +866,8 @@
                 'urenperweek',
                 'werkdagen',
                 'werkschema',
-                'titel'
+                'titel',
+                'werkschema'
             ];
             if (extraHidden.includes(normalizedName)) return true;
 
