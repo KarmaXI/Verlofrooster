@@ -865,6 +865,8 @@
                 'halvedagweekdag',
                 'urenperweek',
                 'werkdagen',
+                'werkschema',
+                'titel',
                 'werkschema'
             ];
             if (extraHidden.includes(normalizedName)) return true;
