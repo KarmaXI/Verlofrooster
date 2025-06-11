@@ -851,6 +851,7 @@
         }
 
         // Enhanced field hiding logic - improved ID detection
+
         function shouldHideField(fieldName) {
             if (!fieldName) return false;
 
