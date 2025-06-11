@@ -851,6 +851,7 @@
         }
 
         // Enhanced field hiding logic - improved ID detection
+
         function shouldHideField(fieldName) {
             if (!fieldName) return false;
 
@@ -866,7 +867,8 @@
                 'urenperweek',
                 'werkdagen',
                 'werkschema',
-                'titel'
+                'titel',
+                'werkschema'
             ];
             if (extraHidden.includes(normalizedName)) return true;
 
